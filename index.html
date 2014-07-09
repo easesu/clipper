@@ -1,0 +1,209 @@
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>clipper</title>
+	<script type="text/javascript" src="src/utils.js"></script>
+	<script type="text/javascript" src="src/event.js"></script>
+	<script type="text/javascript" src="src/control.js"></script>
+	<script type="text/javascript" src="src/view.js"></script>
+	<script type="text/javascript" src="src/button.js"></script>
+	<script type="text/javascript" src="src/range.js"></script>
+	<script type="text/javascript" src="src/crop.js"></script>
+	<script type="text/javascript" src="src/board.js"></script>
+	<script type="text/javascript" src="src/clipper.js"></script>
+	<style type="text/css">
+		html, body {
+			margin: 0;
+			padding: 0;
+		}
+		#box {
+			position: relative;
+			width: 500px;
+			height: 600px;
+			margin: 50px auto 0;
+			border: 1px solid #999;
+		}
+		#canvas {
+			position: relative;
+			z-index: 1;
+		}
+		#video {
+			display: none;
+			position: absolute;
+			left: 0;
+			top: 0;
+			z-index: 2;
+			width: 500px;
+			height: 600px;
+			background: #000;
+		}
+	</style>
+</head>
+<body>
+	<div id="box">
+		<video id="video" width="500" height="600"></video>
+		<canvas id="canvas" width="500" height="600"></canvas>
+	</div>
+	<script type="text/javascript">
+	function openCamera() {
+		navigator.getMedia = navigator.getUserMedia ||
+					   navigator.mozGetUserMedia ||
+					   navigator.webkitGetUserMedia ||
+					   navigator.msGetUserMedia;
+
+	   	navigator.getMedia({
+	   		video: true,
+	   		audio: false
+	   	}, function(media) {
+	   		video.style.display = "block";
+	   		if (navigator.mozGetUserMedia) {
+	   			video.mozSrcObject = media;
+	   		} else {
+	   			var vendorURL = window.URL || window.webkitURL;
+	   			video.src = vendorURL.createObjectURL(media);
+	   		}
+	   		video.play();
+	   	}, function(err) {
+	   	});
+	}
+	function takePicture() {
+		var canvas = document.createElement("canvas");
+		var ctx = canvas.getContext("2d");
+		canvas.width = video.videoWidth;
+		canvas.height = video.videoHeight;
+		ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+		return canvas.toDataURL();
+	}
+	video.addEventListener("click", function() {
+		video.pause();
+		board.loadImage(takePicture());
+        view2.hide();
+		view1.show();
+		if (navigator.mozGetUserMedia) {
+   			video.mozSrcObject = null;
+   		} else {
+   			video.src = "";
+   		}
+   		video.style.display = "none";
+	}, false);
+
+	var clipper = new Clipper(canvas);
+	//view one
+	var view1 = createView({
+		width: clipper.width,
+		height: clipper.height
+	});
+
+	var backButton = createButton({
+		value: "重新选择",
+		width: 150,
+		height: 40,
+		x: clipper.width / 2 - 75,
+		y: clipper.height - 60
+	});
+	var range = createRange({
+		value: 0.5,
+		width: 250,
+		height: 20,
+		x: clipper.width / 2 - 125,
+		y: clipper.height - 100
+	});
+	var crop = createCrop({
+		width: 300,
+		height: 400,
+		x: clipper.width / 2 - 150,
+		y: 50,
+		maxWidth: 300,
+		maxHeight: 400,
+		minX: clipper.width / 2 - 150,
+		minY: 50
+	});
+
+	var board = createBoard({
+		width: 300,
+		height: 400,
+		x: clipper.width / 2 - 150,
+		y: 50
+	});
+
+	backButton.on("click", function() {
+		view1.hide();
+		view2.show();
+		clipper.activeView = view2;
+	});
+	range.on("change:value", function(event) {
+		board.set("scale", event.value);
+	});
+
+	board.on("change:value", function(event) {
+		range.set("value", this.get("scale"));
+	});
+	board.on(["change:scale", "change:maxScale"], function(event) {
+		var offset = board.getImagePosition();
+		crop.setLimit({
+			minX: offset.x,
+			minY: offset.y,
+			maxWidth: offset.width,
+			maxHeight: offset.height
+		});
+	});
+
+	//view two
+	var view2 = createView({
+		width: clipper.width,
+		height: clipper.height
+	});
+	var button3 = createButton({
+		value: "本地照片",
+		width: 150,
+		height: 40,
+		x: clipper.width / 2 - 170,
+		y: clipper.height / 2 - 20
+	});
+	var button4 = createButton({
+		value: "拍照",
+		width: 150,
+		height: 40,
+		x: clipper.width / 2 + 20,
+		y: clipper.height / 2 - 20
+	});
+
+	button3.on("click", function() {
+		var file = document.createElement("input");
+
+		file.type = "file";
+		file.accept = "image/*";
+		file.addEventListener("change", function() {
+	        var url = window.URL.createObjectURL(this.files[0]);
+	        var image = new Image();
+	        image.onload = function() {
+	            board.loadImage(image);
+	            view2.hide();
+				view1.show();
+	        }
+	        image.src = url;
+	        window.URL.revokeObjectURL(url);
+	    }, false);
+
+		file.click();
+	});
+
+	button4.on("click", function() {
+		openCamera();
+	});
+
+	
+	view1.addControl(board);
+	view1.addControl(range);
+	view1.addControl(crop);
+	view1.addControl(backButton);
+	view2.addControl(button3);
+	view2.addControl(button4);
+	clipper.addView(view2);
+	clipper.addView(view1);
+	clipper.activeView = view2;
+	clipper.draw();
+	</script>
+
+</body>
+</html>
